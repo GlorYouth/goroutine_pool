@@ -16,6 +16,8 @@ A goroutine task pool
 - 退出等待 taskC 清空时增加 sleep 减少 cpu 负载
 #### v1.5
 - 优化锁，解决只有一个 woker 时产生 panic 后无发消费 task 导致 deadlock 的问题 (见 [issue 极端情况 #4](https://github.com/wazsmwazsm/mortar/issues/4))
+#### v1.6 见分支go_1.18_template
+- 使用go 1.18的模板改善golang初学者的使用体验
 
 ## 解决什么问题
 
