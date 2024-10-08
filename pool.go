@@ -1,4 +1,4 @@
-package mortar
+package pool
 
 import (
 	"errors"
@@ -10,9 +10,9 @@ import (
 
 // errors
 var (
-	// return if pool size <= 0
+	// ErrInvalidPoolCap return if pool size <= 0
 	ErrInvalidPoolCap = errors.New("invalid pool cap")
-	// put task but pool already closed
+	// ErrPoolAlreadyClosed put task but pool already closed
 	ErrPoolAlreadyClosed = errors.New("pool already closed")
 )
 
@@ -23,36 +23,36 @@ const (
 )
 
 // Task task to-do
-type Task struct {
-	Handler func(v ...interface{})
-	Params  []interface{}
+type Task[T any] struct {
+	Handler func(v T)
+	Params  T
 }
 
 // Pool task pool
-type Pool struct {
+type Pool[T any] struct {
 	capacity       uint64
 	runningWorkers uint64
 	status         int64
-	chTask         chan *Task
-	PanicHandler   func(interface{})
+	chTask         chan *Task[T]
+	PanicHandler   func(any)
 	sync.Mutex
 }
 
 // NewPool init pool
-func NewPool(capacity uint64) (*Pool, error) {
+func NewPool[T any](capacity uint64) (*Pool[T], error) {
 	if capacity <= 0 {
 		return nil, ErrInvalidPoolCap
 	}
-	p := &Pool{
+	p := &Pool[T]{
 		capacity: capacity,
 		status:   RUNNING,
-		chTask:   make(chan *Task, capacity),
+		chTask:   make(chan *Task[T], capacity),
 	}
 
 	return p, nil
 }
 
-func (p *Pool) checkWorker() {
+func (p *Pool[T]) checkWorker() {
 	p.Lock()
 	defer p.Unlock()
 
@@ -62,25 +62,25 @@ func (p *Pool) checkWorker() {
 }
 
 // GetCap get capacity
-func (p *Pool) GetCap() uint64 {
+func (p *Pool[T]) GetCap() uint64 {
 	return p.capacity
 }
 
 // GetRunningWorkers get running workers
-func (p *Pool) GetRunningWorkers() uint64 {
+func (p *Pool[T]) GetRunningWorkers() uint64 {
 	return atomic.LoadUint64(&p.runningWorkers)
 }
 
-func (p *Pool) incRunning() {
+func (p *Pool[T]) incRunning() {
 	atomic.AddUint64(&p.runningWorkers, 1)
 }
 
-func (p *Pool) decRunning() {
+func (p *Pool[T]) decRunning() {
 	atomic.AddUint64(&p.runningWorkers, ^uint64(0))
 }
 
-// Put put a task to pool
-func (p *Pool) Put(task *Task) error {
+// Put a task to pool
+func (p *Pool[T]) Put(task *Task[T]) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -101,7 +101,7 @@ func (p *Pool) Put(task *Task) error {
 	return nil
 }
 
-func (p *Pool) run() {
+func (p *Pool[T]) run() {
 	p.incRunning()
 
 	go func() {
@@ -123,13 +123,13 @@ func (p *Pool) run() {
 				if !ok {
 					return
 				}
-				task.Handler(task.Params...)
+				task.Handler(task.Params)
 			}
 		}
 	}()
 }
 
-func (p *Pool) setStatus(status int64) bool {
+func (p *Pool[T]) setStatus(status int64) bool {
 	p.Lock()
 	defer p.Unlock()
 
@@ -142,8 +142,8 @@ func (p *Pool) setStatus(status int64) bool {
 	return true
 }
 
-// Close close pool graceful
-func (p *Pool) Close() {
+// Close pool graceful
+func (p *Pool[T]) Close() {
 
 	if !p.setStatus(STOPED) { // stop put task
 		return
